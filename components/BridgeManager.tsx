@@ -15,55 +15,31 @@ const BridgeManager: React.FC<Props> = ({ settings }) => {
   const isProcessingRef = useRef(false);
 
   useEffect(() => {
-    if (!settings.bridgeEnabled || !settings.bridgeUrl) {
+    if (!settings.bridgeEnabled) {
       setStatus('disconnected');
       return;
     }
 
-    // Register session on startup
-    const registerSession = async () => {
-      try {
-        const cleanUrl = settings.bridgeUrl.replace(/\/$/, '');
-        await fetch(`${cleanUrl}/register?session=${settings.bridgeSessionId}`, {
-          method: 'POST'
-        });
-      } catch (e) {
-        console.warn('Bridge registration failed, will retry on poll', e);
-      }
-    };
-    registerSession();
-
     const pollBridge = async () => {
-      if (isProcessingRef.current) return; // Skip polling if currently processing a request
+      if (isProcessingRef.current) return;
 
       try {
-        const cleanUrl = settings.bridgeUrl.replace(/\/$/, '');
-        const response = await fetch(`${cleanUrl}/poll?session_id=${settings.bridgeSessionId}`, {
-          headers: {
-            'Accept': 'application/json',
-            'ngrok-skip-browser-warning': 'true', // Bypass ngrok warning page
-            'Bypass-Tunnel-Reminder': 'true'      // Bypass localtunnel warning page
-          }
-        });
+        // Poll our own backend instead of Termux ngrok
+        const response = await fetch(`/api/openclaw/pending`);
         
         if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+          const text = await response.text();
+          throw new Error(`HTTP error! status: ${response.status}, body: ${text.substring(0, 100)}`);
         }
 
-        const contentType = response.headers.get("content-type");
-        if (!contentType || !contentType.includes("application/json")) {
-          const text = await response.text();
-          throw new Error(`Expected JSON but got HTML/Text. Tunnel might be showing a warning page or URL is incorrect. Preview: ${text.substring(0, 50)}`);
-        }
-        
         const data = await response.json();
         
         if (status === 'disconnected' || status === 'error') {
           setStatus('connected');
         }
 
-        if (data.has_pending_request && data.request) {
-          await handleAwarenessTransfer(data.request);
+        if (data.has_pending && data.request) {
+          await handleAwarenessTransfer(data.task_id, data.request);
         }
       } catch (error) {
         console.error('Bridge polling failed:', error);
@@ -73,15 +49,14 @@ const BridgeManager: React.FC<Props> = ({ settings }) => {
 
     const intervalId = setInterval(pollBridge, 2000);
     return () => clearInterval(intervalId);
-  }, [settings.bridgeEnabled, settings.bridgeUrl, settings.bridgeSessionId]);
+  }, [settings.bridgeEnabled]);
 
-  const handleAwarenessTransfer = async (request: any) => {
+  const handleAwarenessTransfer = async (taskId: string, request: any) => {
     isProcessingRef.current = true;
     setStatus('processing');
     setLastMessage(`Menerima request dari Termux: ${request.action || 'task'}`);
 
     try {
-      // 1. Parse context dari Termux
       const contextStr = JSON.stringify(request.context || {}, null, 2);
       const payloadStr = JSON.stringify(request.payload || {}, null, 2);
       
@@ -97,17 +72,14 @@ ${payloadStr}
 
 Berikan respon yang sesuai untuk dikembalikan ke Termux.`;
 
-      // 2. Generate response menggunakan model AI
       const aiResponseText = await makeLLMRequest(
         settings, 
         [{ role: 'user', content: prompt }],
         "You are the central intelligence of OpenClaw. Process the awareness transfer from the local terminal and provide a helpful, accurate response."
       );
 
-      // 3. Format response
       const responsePayload = {
         type: "awareness_response",
-        session_id: settings.bridgeSessionId,
         status: "success",
         message: "Processed successfully by GeminRP",
         data: {
@@ -118,12 +90,14 @@ Berikan respon yang sesuai untuk dikembalikan ke Termux.`;
         }
       };
 
-      // 4. Kirim balik ke bridge
-      const cleanUrl = settings.bridgeUrl.replace(/\/$/, '');
-      await fetch(`${cleanUrl}/response`, {
+      // Send response back to our backend
+      await fetch(`/api/openclaw/respond`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(responsePayload)
+        body: JSON.stringify({
+          task_id: taskId,
+          response: responsePayload
+        })
       });
 
       setLastMessage('Respon berhasil dikirim ke Termux');
@@ -131,22 +105,22 @@ Berikan respon yang sesuai untuk dikembalikan ke Termux.`;
     } catch (error: any) {
       console.error('Error processing awareness transfer:', error);
       
-      // Send error back to bridge
       try {
-        const cleanUrl = settings.bridgeUrl.replace(/\/$/, '');
-        await fetch(`${cleanUrl}/response`, {
+        await fetch(`/api/openclaw/respond`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            type: "awareness_response",
-            session_id: settings.bridgeSessionId,
-            status: "error",
-            message: error.message || "Internal processing error",
-            data: null
+            task_id: taskId,
+            response: {
+              type: "awareness_response",
+              status: "error",
+              message: error.message || "Internal processing error",
+              data: null
+            }
           })
         });
       } catch (e) {
-        console.error('Failed to send error response to bridge', e);
+        console.error('Failed to send error response to backend', e);
       }
     } finally {
       setStatus('connected');

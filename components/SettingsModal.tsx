@@ -558,20 +558,60 @@ const SettingsModal: React.FC<Props> = ({ isOpen, onClose, settings, onSave, onD
              
              {localSettings.bridgeEnabled && (
                  <div className="space-y-4 mt-4 animate-fade-in">
-                     <div className="space-y-2">
-                         <label className="block text-sm font-medium text-gray-300">Bridge Tunnel URL</label>
-                         <p className="text-xs text-gray-500">URL publik dari Node.js Bridge Server Anda (contoh: https://[random].serveousercontent.com)</p>
-                         <input
-                             type="text"
-                             value={localSettings.bridgeUrl}
-                             onChange={(e) => setLocalSettings({...localSettings, bridgeUrl: e.target.value})}
-                             className="w-full bg-gray-950 border border-gray-750 rounded-lg p-3 text-white focus:ring-2 focus:ring-primary-500 outline-none font-mono text-sm"
-                             placeholder="https://..."
-                         />
+                     <div className="p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg text-xs text-yellow-200 mb-2">
+                         <i className="fas fa-exclamation-triangle mr-1 text-yellow-500"></i>
+                         <strong>PENTING (Mencegah Error 302 Redirect):</strong> Jika Anda menjalankan ini di AI Studio, pastikan URL yang digunakan adalah <strong>Shared App URL</strong> (berawalan <code>ais-pre-</code>), BUKAN URL Dev (<code>ais-dev-</code>). URL Dev dilindungi oleh login Google sehingga Termux akan diblokir (302 Redirect).
                      </div>
+
+                     <div className="space-y-2">
+                         <label className="block text-sm font-medium text-gray-300">1. Endpoint Background Task (Awareness)</label>
+                         <p className="text-xs text-gray-500">Gunakan ini agar OpenClaw bisa berpikir di latar belakang tanpa masuk ke UI Chat.</p>
+                         <div className="flex gap-2">
+                             <input
+                                 type="text"
+                                 value={`${window.location.origin.replace('ais-dev-', 'ais-pre-')}/api/openclaw`}
+                                 readOnly
+                                 className="w-full bg-gray-950 border border-gray-750 rounded-lg p-3 text-green-400 outline-none font-mono text-sm"
+                             />
+                             <button 
+                                 onClick={() => {
+                                     navigator.clipboard.writeText(`${window.location.origin.replace('ais-dev-', 'ais-pre-')}/api/openclaw`);
+                                     alert('URL disalin ke clipboard!');
+                                 }}
+                                 className="px-4 bg-gray-700 hover:bg-gray-600 text-white rounded-lg border border-gray-600 transition"
+                                 title="Copy URL"
+                             >
+                                 <i className="fas fa-copy"></i>
+                             </button>
+                         </div>
+                     </div>
+
+                     <div className="space-y-2">
+                         <label className="block text-sm font-medium text-gray-300">2. Endpoint Chat Karakter (Collab)</label>
+                         <p className="text-xs text-gray-500">Gunakan ini jika OpenClaw ingin mengirim pesan langsung ke karakter yang sedang aktif di UI Chat. (Kirim JSON: <code>{`{"user_message": "pesan Anda"}`}</code>)</p>
+                         <div className="flex gap-2">
+                             <input
+                                 type="text"
+                                 value={`${window.location.origin.replace('ais-dev-', 'ais-pre-')}/api/openclaw/send-collab`}
+                                 readOnly
+                                 className="w-full bg-gray-950 border border-gray-750 rounded-lg p-3 text-blue-400 outline-none font-mono text-sm"
+                             />
+                             <button 
+                                 onClick={() => {
+                                     navigator.clipboard.writeText(`${window.location.origin.replace('ais-dev-', 'ais-pre-')}/api/openclaw/send-collab`);
+                                     alert('URL disalin ke clipboard!');
+                                 }}
+                                 className="px-4 bg-gray-700 hover:bg-gray-600 text-white rounded-lg border border-gray-600 transition"
+                                 title="Copy URL"
+                             >
+                                 <i className="fas fa-copy"></i>
+                             </button>
+                         </div>
+                     </div>
+
                      <div className="space-y-2">
                          <label className="block text-sm font-medium text-gray-300">Session ID</label>
-                         <p className="text-xs text-gray-500">ID unik untuk sesi ini. Digunakan untuk sinkronisasi dengan Termux.</p>
+                         <p className="text-xs text-gray-500">ID unik untuk sesi ini. (Opsional untuk keamanan tambahan)</p>
                          <div className="flex gap-2">
                              <input
                                  type="text"

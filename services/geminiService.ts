@@ -261,7 +261,7 @@ export const makeLLMRequest = async (
 
     } else {
         // Google Gemini Logic
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const ai = new GoogleGenAI({ apiKey: settings.apiKey || process.env.GEMINI_API_KEY });
         
         const geminiConfig: any = {
             temperature: settings.temperature,

@@ -17,7 +17,7 @@ const CollaborativeBridge: React.FC<Props> = ({ settings, character, onInjectDir
 
   // Auto-notification when character replies (Bridge Mode)
   useEffect(() => {
-    if (!settings.bridgeEnabled || !settings.bridgeUrl || !lastCharacterMessage) return;
+    if (!settings.bridgeEnabled || !lastCharacterMessage) return;
     
     if (lastCharacterMessage.id !== lastNotificationId && lastCharacterMessage.role === 'model') {
       setLastNotificationId(lastCharacterMessage.id);
@@ -25,8 +25,7 @@ const CollaborativeBridge: React.FC<Props> = ({ settings, character, onInjectDir
       // Notify OpenClaw that character replied, including the actual text
       const notifyBridge = async () => {
         try {
-          const cleanUrl = settings.bridgeUrl.replace(/\/$/, '');
-          await fetch(`${cleanUrl}/collab-notify`, {
+          await fetch(`/api/openclaw/collab-notify`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
@@ -45,20 +44,21 @@ const CollaborativeBridge: React.FC<Props> = ({ settings, character, onInjectDir
     }
   }, [lastCharacterMessage, settings, lastNotificationId, character.name]);
 
+  const onInjectDirectionRef = React.useRef(onInjectDirection);
+  const onInjectUserMessageRef = React.useRef(onInjectUserMessage);
+
+  useEffect(() => {
+    onInjectDirectionRef.current = onInjectDirection;
+    onInjectUserMessageRef.current = onInjectUserMessage;
+  }, [onInjectDirection, onInjectUserMessage]);
+
   // Polling for collaborative directions or remote user messages
   useEffect(() => {
-    if (!settings.bridgeEnabled || !settings.bridgeUrl) return;
+    if (!settings.bridgeEnabled) return;
     
     const pollCollab = async () => {
       try {
-        const cleanUrl = settings.bridgeUrl.replace(/\/$/, '');
-        const res = await fetch(`${cleanUrl}/poll-collab?session_id=${settings.bridgeSessionId}`, {
-          headers: {
-            'Accept': 'application/json',
-            'ngrok-skip-browser-warning': 'true',
-            'Bypass-Tunnel-Reminder': 'true'
-          }
-        });
+        const res = await fetch(`/api/openclaw/poll-collab?session_id=${settings.bridgeSessionId}`);
         
         if (res.ok) {
           const data = await res.json();
@@ -66,26 +66,19 @@ const CollaborativeBridge: React.FC<Props> = ({ settings, character, onInjectDir
           let handled = false;
           
           // 1. Handle Hidden Direction (Sutradara)
-          if (data.has_direction && data.direction) {
+          if (data.has_collab && data.data?.direction) {
             setStatus('received');
-            onInjectDirection(data.direction);
+            onInjectDirectionRef.current(data.data.direction);
             handled = true;
           } 
           // 2. Handle Visible User Message (OpenClaw as User)
-          else if (data.has_user_message && data.user_message) {
+          else if (data.has_collab && data.data?.user_message) {
             setStatus('received');
-            onInjectUserMessage(data.user_message);
+            onInjectUserMessageRef.current(data.data.user_message);
             handled = true;
           }
 
           if (handled) {
-            // Acknowledge receipt
-            await fetch(`${cleanUrl}/ack-collab`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ session_id: settings.bridgeSessionId, status: 'received' })
-            });
-            
             setTimeout(() => setStatus('idle'), 3000);
           }
         }
@@ -96,7 +89,7 @@ const CollaborativeBridge: React.FC<Props> = ({ settings, character, onInjectDir
 
     const intervalId = setInterval(pollCollab, 3000);
     return () => clearInterval(intervalId);
-  }, [settings.bridgeEnabled, settings.bridgeUrl, settings.bridgeSessionId, onInjectDirection, onInjectUserMessage]);
+  }, [settings.bridgeEnabled, settings.bridgeSessionId]);
 
   const handleManualSubmit = () => {
     if (!direction.trim()) return;

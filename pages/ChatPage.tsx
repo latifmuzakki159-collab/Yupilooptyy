@@ -106,11 +106,10 @@ const ChatPage: React.FC<Props> = ({ settings }) => {
 
   // Sync State to Bridge (SillyTavern-like Context Sync)
   useEffect(() => {
-    if (view === 'chat' && character && settings.bridgeEnabled && settings.bridgeUrl) {
+    if (view === 'chat' && character && settings.bridgeEnabled) {
         const syncState = async () => {
             try {
-                const cleanUrl = settings.bridgeUrl.replace(/\/$/, '');
-                await fetch(`${cleanUrl}/sync-state`, {
+                await fetch(`/api/openclaw/sync-state`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -138,7 +137,7 @@ const ChatPage: React.FC<Props> = ({ settings }) => {
         const timeoutId = setTimeout(syncState, 1500);
         return () => clearTimeout(timeoutId);
     }
-  }, [messages, view, character, settings.bridgeEnabled, settings.bridgeUrl, settings.bridgeSessionId]);
+  }, [messages, view, character, settings.bridgeEnabled, settings.bridgeSessionId]);
 
   // Scroll to bottom on new message (only if not editing/swiping history)
   useEffect(() => {
@@ -788,7 +787,7 @@ const ChatPage: React.FC<Props> = ({ settings }) => {
           settings={settings}
           character={character}
           onInjectDirection={(direction) => handleSendMessage('', direction)}
-          onInjectUserMessage={(message) => handleSendMessage(message)}
+          onInjectUserMessage={(message) => handleSendMessage(message, '')}
           lastCharacterMessage={messages.length > 0 && messages[messages.length - 1].role === 'model' ? messages[messages.length - 1] : null}
       />
 
